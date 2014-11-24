@@ -492,8 +492,7 @@ static int my_unlink(const char *path) {
 	///Ahora borramos el i-nodo
 	miSistemaDeFicheros.nodosI[idxNodoI]->libre = true;
 	miSistemaDeFicheros.numNodosLibres++;
-	free(miSistemaDeFicheros.nodosI[idxNodoI]);
-	miSistemaDeFicheros.nodosI[idxNodoI]=NULL;
+	
 
 	//Liberamos el directorio
 	miSistemaDeFicheros.directorio.archivos[idxNodoI].libre = true;
@@ -503,8 +502,11 @@ static int my_unlink(const char *path) {
 
 	escribeDirectorio(&miSistemaDeFicheros);
 	escribeNodoI(&miSistemaDeFicheros, idxNodoI, miSistemaDeFicheros.nodosI[idxNodoI]);
-	sync();
 	
+	//Liberamos la memoria del heap del nodoI
+	free(miSistemaDeFicheros.nodosI[idxNodoI]);
+	miSistemaDeFicheros.nodosI[idxNodoI]=NULL;
+	sync();	
 	return 0;
 }
 
