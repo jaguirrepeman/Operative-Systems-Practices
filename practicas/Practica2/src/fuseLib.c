@@ -317,7 +317,7 @@ static int my_write(const char *path, const char *buf, size_t size, off_t offset
 }
 /* Leemos  de path, guardamos en bud, la cantida que indica size, a partir de offset*/
 
-static int my_read(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+static int my_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
 	char buffer[TAM_BLOQUE_BYTES];
 	int bytes2Read=size, totalRead=0;
 	EstructuraNodoI *nodoI = miSistemaDeFicheros.nodosI[fi->fh];
@@ -348,7 +348,7 @@ static int my_read(const char *path, const char *buf, size_t size, off_t offset,
 
 
 		//Leemos lo que podamos en el bloque en que estamos
-		for(i=offBloque; (i<TAM_BLOQUE_BYTES) && (totalWrite<size); i++){
+		for(i=offBloque; (i<TAM_BLOQUE_BYTES) && (totalRead<bytes2Read); i++){
 			buf[totalRead++]=buffer[i];
 		}
 		
@@ -468,9 +468,9 @@ static int my_truncate(const char *path, off_t size) {
  * Borra el fichero indicado en path
 */
 static int my_unlink(const char *path) {
-	int idxNodoI, posDir;
+	int idxNodoI;
 
-	fprintf(stderr, "--->>>my_unlink: path %s, path);
+	fprintf(stderr, "--->>>my_unlink: path %s", path);
 	
 	//Como en my_release, obtenemos el NodoI correspondiente
 	if( (idxNodoI=buscaPosDirectorio(&miSistemaDeFicheros, (char*)path+1)) == -1){
@@ -503,7 +503,9 @@ static int my_unlink(const char *path) {
 
 	escribeDirectorio(&miSistemaDeFicheros);
 	escribeNodoI(&miSistemaDeFicheros, idxNodoI, miSistemaDeFicheros.nodosI[idxNodoI]);
-
+	sync();
+	
+	return 0;
 }
 
 
@@ -515,6 +517,6 @@ struct fuse_operations myFS_operations = {
 	.write		= my_write,						//Escribir datos en un fichero abierto
 	.release	= my_release,					//Cerrar un fichero abierto
 	.mknod		= my_mknod,						//Crear un fichero nuevo
-	.unlink = my_unlink,
-	.read = my_read
+	.unlink 	= my_unlink,
+	.read 		= my_read
 };
