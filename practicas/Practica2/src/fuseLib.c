@@ -315,10 +315,12 @@ static int my_write(const char *path, const char *buf, size_t size, off_t offset
 	
 	return size;
 }
-/* Leemos  de path, guardamos en bud, la cantida que indica size, a partir de offset*/
+
+/* Leemos  de path, guardamos en buf, la cantidad que indica size, a partir de offset*/
 
 static int my_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
 	char buffer[TAM_BLOQUE_BYTES];
+	//En principio leeremos los bytes que indica size
 	int bytes2Read=size, totalRead=0;
 	EstructuraNodoI *nodoI = miSistemaDeFicheros.nodosI[fi->fh];
 	fprintf(stderr, "--->>>my_read: path %s, size %zu, offset %jd, fh %"PRIu64"\n", path, size, (intmax_t)offset, fi->fh);
@@ -494,17 +496,18 @@ static int my_unlink(const char *path) {
 	miSistemaDeFicheros.numNodosLibres++;
 	
 
-	//Liberamos el directorio
+	//Liberamos el archivo
 	miSistemaDeFicheros.directorio.archivos[idxNodoI].libre = true;
 	miSistemaDeFicheros.directorio.numArchivos--;
 	
-	//Actualizamos en el sistema
-
+	//Actualizamos en el sistema el directorio y el nodoI.
+	
 	escribeDirectorio(&miSistemaDeFicheros);
 	escribeNodoI(&miSistemaDeFicheros, idxNodoI, miSistemaDeFicheros.nodosI[idxNodoI]);
 	
 	//Liberamos la memoria del heap del nodoI
 	free(miSistemaDeFicheros.nodosI[idxNodoI]);
+	//Lo ponemos a NULL para después de liberar la memoria para proteger de futuros accesos
 	miSistemaDeFicheros.nodosI[idxNodoI]=NULL;
 	sync();	
 	return 0;
@@ -517,8 +520,9 @@ struct fuse_operations myFS_operations = {
 	.truncate	= my_truncate,					//Modificar el tamaño de un fichero
 	.open		= my_open,						//Abrir un fichero
 	.write		= my_write,						//Escribir datos en un fichero abierto
+	.read 		= my_read,						//Leer datos de un fichero abierto
 	.release	= my_release,					//Cerrar un fichero abierto
 	.mknod		= my_mknod,						//Crear un fichero nuevo
-	.unlink 	= my_unlink,
-	.read 		= my_read
+	.unlink 	= my_unlink					//Borrar un fichero
+
 };
