@@ -316,6 +316,56 @@ static int my_write(const char *path, const char *buf, size_t size, off_t offset
 	return size;
 }
 
+
+static int my_read(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+	char buffer[TAM_BLOQUE_BYTES];
+	int bytes2Read=size, totalRead=0;
+	EstructuraNodoI *nodoI = miSistemaDeFicheros.nodosI[fi->fh];
+	fprintf(stderr, "--->>>my_read: path %s, size %zu, offset %jd, fh %"PRIu64"\n", path, size, (intmax_t)offset, fi->fh);
+
+	int tamArchivo = nodoI->tamArchivo;
+
+	//Si el archivo no tiene tamaño como para leer size leemos menos
+	if ((tamArchivo - offset) < size)
+		bytes2Read = tamArchivo - offset;
+
+	//Leemos los datos
+	while(bytes2Read > totalRead){
+		int i;
+		int bloqueActual, offBloque;
+		//Nos ponemos en el bloque que indica offset
+		bloqueActual = nodoI->idxBloques[offset / TAM_BLOQUE_BYTES];
+		//Nos colocamos en la posicion dentro del bloque
+		offBloque = offset % TAM_BLOQUE_BYTES;
+
+
+
+		if ( (lseek(miSistemaDeFicheros.fdDiscoVirtual, bloqueActual * TAM_BLOQUE_BYTES, SEEK_SET) == (off_t) - 1) ||
+			 (read(miSistemaDeFicheros.fdDiscoVirtual, &buffer, TAM_BLOQUE_BYTES) == -1) ){
+			perror("Falló lseek/read en my_raed");
+			return -EIO;
+		}
+
+
+		//Leemos lo que podamos en el bloque en que estamos
+		for(i=offBloque; (i<TAM_BLOQUE_BYTES) && (totalWrite<size); i++){
+			buf[totalRead++]=buffer[i];
+		}
+		
+
+
+		//Descontamos lo leido
+		//Aquí bytes2Read están fijos pues ya los hemos 
+		// calculado al principio  
+		// bytes2Read-=(i-offBloque);
+		offset+=i;
+	}
+
+
+	//Devolvemos lo que hemos leído
+	return totalRead;
+}
+
 /*
  * Release an open file
  *
@@ -427,35 +477,38 @@ static int my_unlink(const char *path) {
 
 	fprintf(stderr, "--->>>my_unlink: path %s, path);
 	
-	//Buscamos la posición relativa del directorio a borrar(ver myFS.c)
-	if( (posDir=buscaPosDirectorio(&miSistemaDeFicheros, (char*)path+1)) == -1){
+	//Como en my_release, obtenemos el NodoI correspondiente
+	if( (idxNodoI=buscaPosDirectorio(&miSistemaDeFicheros, (char*)path+1)) == -1){
 		return -ENOENT;
 	}
-	//Guardamos el número de nodo correspondiente al directorio.
-	idxNodoI = miSistemaDeFicheros.directorio.archivos[posDir].idxNodoI;
-
 	//Modificamos el tamaño del fichero. Como borramos lo ponemos a 0.
 	//ResizeInodo liberará el espacio que sea necesario.
 	if(resizeInodo(idxNodoI, 0)<0)
 		return -EIO;
 	
-	/*
-
-	Nos actualiza el nodo
+	/*	Nos actualiza el nodo
 	nodoI->tiempoModificado = time(NULL);
 
 	/// Guardamos en disco el contenido de las estructuras modificadas
 	escribeSuperBloque(&miSistemaDeFicheros);
 	escribeMapaDeBits(&miSistemaDeFicheros);
-	escribeNodoI(&miSistemaDeFicheros, idxNodoI, nodoI);
+	escribeNodoI(&miSistemaDeFicheros, idxNodoI, nodoI);	*/
 
-	*/
 	///Ahora borramos el i-nodo
 	miSistemaDeFicheros.nodosI[idxNodoI]->libre = true;
 	miSistemaDeFicheros.numNodosLibres++;
-	miSistemaDeFicheros.directorio.archivos[posDir].idxNodoI;
+	free(miSistemaDeFicheros.nodosI[idxNodoI]);
+	miSistemaDeFicheros.nodosI[idxNodoI]=NULL;
+
+	//Liberamos el directorio
+	miSistemaDeFicheros.directorio.archivos[idxNodoI].libre = true;
+	miSistemaDeFicheros.directorio.numArchivos--;
 	
-	
+	//Actualizamos en el sistema
+
+	escribeDirectorio(&miSistemaDeFicheros);
+	escribeNodoI(&miSistemaDeFicheros, idxNodoI, miSistemaDeFicheros.nodosI[idxNodoI]);
+
 }
 
 
@@ -467,5 +520,6 @@ struct fuse_operations myFS_operations = {
 	.write		= my_write,						//Escribir datos en un fichero abierto
 	.release	= my_release,					//Cerrar un fichero abierto
 	.mknod		= my_mknod,						//Crear un fichero nuevo
-	.unlink = my_unlink
+	.unlink = my_unlink,
+	.read = my_read
 };
