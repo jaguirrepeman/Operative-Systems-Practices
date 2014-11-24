@@ -315,7 +315,7 @@ static int my_write(const char *path, const char *buf, size_t size, off_t offset
 	
 	return size;
 }
-
+/* Leemos  de path, guardamos en bud, la cantida que indica size, a partir de offset*/
 
 static int my_read(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
 	char buffer[TAM_BLOQUE_BYTES];
@@ -325,7 +325,7 @@ static int my_read(const char *path, const char *buf, size_t size, off_t offset,
 
 	int tamArchivo = nodoI->tamArchivo;
 
-	//Si el archivo no tiene tamaño como para leer size leemos menos
+	//Si el archivo no tiene tamaño como para leer size, leemos hasta el final del archivo
 	if ((tamArchivo - offset) < size)
 		bytes2Read = tamArchivo - offset;
 
@@ -338,7 +338,7 @@ static int my_read(const char *path, const char *buf, size_t size, off_t offset,
 		//Nos colocamos en la posicion dentro del bloque
 		offBloque = offset % TAM_BLOQUE_BYTES;
 
-
+		
 
 		if ( (lseek(miSistemaDeFicheros.fdDiscoVirtual, bloqueActual * TAM_BLOQUE_BYTES, SEEK_SET) == (off_t) - 1) ||
 			 (read(miSistemaDeFicheros.fdDiscoVirtual, &buffer, TAM_BLOQUE_BYTES) == -1) ){
@@ -352,12 +352,7 @@ static int my_read(const char *path, const char *buf, size_t size, off_t offset,
 			buf[totalRead++]=buffer[i];
 		}
 		
-
-
-		//Descontamos lo leido
-		//Aquí bytes2Read están fijos pues ya los hemos 
-		// calculado al principio  
-		// bytes2Read-=(i-offBloque);
+		//Pasamos a leer al siguiente bloque.
 		offset+=i;
 	}
 
