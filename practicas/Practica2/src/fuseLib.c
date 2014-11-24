@@ -419,6 +419,45 @@ static int my_truncate(const char *path, off_t size) {
 	
 	return 0;
 }
+/*
+ * Borra el fichero indicado en path
+*/
+static int my_unlink(const char *path) {
+	int idxNodoI, posDir;
+
+	fprintf(stderr, "--->>>my_unlink: path %s, path);
+	
+	//Buscamos la posición relativa del directorio a borrar(ver myFS.c)
+	if( (posDir=buscaPosDirectorio(&miSistemaDeFicheros, (char*)path+1)) == -1){
+		return -ENOENT;
+	}
+	//Guardamos el número de nodo correspondiente al directorio.
+	idxNodoI = miSistemaDeFicheros.directorio.archivos[posDir].idxNodoI;
+
+	//Modificamos el tamaño del fichero. Como borramos lo ponemos a 0.
+	//ResizeInodo liberará el espacio que sea necesario.
+	if(resizeInodo(idxNodoI, 0)<0)
+		return -EIO;
+	
+	/*
+
+	Nos actualiza el nodo
+	nodoI->tiempoModificado = time(NULL);
+
+	/// Guardamos en disco el contenido de las estructuras modificadas
+	escribeSuperBloque(&miSistemaDeFicheros);
+	escribeMapaDeBits(&miSistemaDeFicheros);
+	escribeNodoI(&miSistemaDeFicheros, idxNodoI, nodoI);
+
+	*/
+	///Ahora borramos el i-nodo
+	miSistemaDeFicheros.nodosI[idxNodoI]->libre = true;
+	miSistemaDeFicheros.numNodosLibres++;
+	miSistemaDeFicheros.directorio.archivos[posDir].idxNodoI;
+	
+	
+}
+
 
 struct fuse_operations myFS_operations = {
 	.getattr	= my_getattr,					//Obtener atributos de un fichero
@@ -428,5 +467,5 @@ struct fuse_operations myFS_operations = {
 	.write		= my_write,						//Escribir datos en un fichero abierto
 	.release	= my_release,					//Cerrar un fichero abierto
 	.mknod		= my_mknod,						//Crear un fichero nuevo
-	//.unlink = my_unlink
+	.unlink = my_unlink
 };

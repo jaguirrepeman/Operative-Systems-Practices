@@ -37,6 +37,7 @@ int myMkfs(MiSistemaDeFicheros* miSistemaDeFicheros, int tamDisco, char* nombreA
 	miSistemaDeFicheros->mapaDeBits[MAPA_BITS_IDX] = 1;
 	miSistemaDeFicheros->mapaDeBits[SUPERBLOQUE_IDX] = 1;
 	miSistemaDeFicheros->mapaDeBits[DIRECTORIO_IDX] = 1;
+
 	// Los siguientes NUM_INODE_BLOCKS contendrán nodos-i
 	for (i = 3; i < 3 + MAX_BLOQUES_CON_NODOSI; i++) {
 		miSistemaDeFicheros->mapaDeBits[i] = 1;
@@ -91,6 +92,8 @@ void initSuperBloque(MiSistemaDeFicheros* miSistemaDeFicheros, int tamDisco) {
     miSistemaDeFicheros->superBloque.maxBloquesPorArchivo = MAX_BLOQUES_POR_ARCHIVO;
 }
 
+
+//Liberamos la memoria del sistema de ficheros y lo cerramos.
 void myFree(MiSistemaDeFicheros* miSistemaDeFicheros) {
 	int i;
     close(miSistemaDeFicheros->fdDiscoVirtual);
@@ -100,12 +103,18 @@ void myFree(MiSistemaDeFicheros* miSistemaDeFicheros) {
     }
 }
 
+/*	Escribe el mapa de bits en el sistema de ficheros	*/
 
 int escribeMapaDeBits(MiSistemaDeFicheros* miSistemaDeFicheros) {
+	/*Colocamos el puntero sobre el mapa de bits
+	TAM_BLOQUE_BYTES vale 4096	y 	MAPA_BITS_IDX vale 1*/
+
     if (lseek(miSistemaDeFicheros->fdDiscoVirtual, TAM_BLOQUE_BYTES * MAPA_BITS_IDX, SEEK_SET) == (off_t) - 1) {
         perror("Falló lseek en escribeMapaDeBits");
         return -1;
     }
+	/*Escribimos el mapaDeBits actual sobre el sistema de ficheros*/
+
     if (write(miSistemaDeFicheros->fdDiscoVirtual,
             miSistemaDeFicheros->mapaDeBits, sizeof (BIT) * NUM_BITS) == -1) {
         perror("Falló write en escribeMapaDeBits");
@@ -114,15 +123,22 @@ int escribeMapaDeBits(MiSistemaDeFicheros* miSistemaDeFicheros) {
     return 0;
 }
 
+/*Escribe el nodo que pasamos(nodoI) en el número de nodo indicado(numNodoI) sobre el sistema de ficheros*/
+
 int escribeNodoI(MiSistemaDeFicheros* miSistemaDeFicheros, int numNodoI, EstructuraNodoI* nodoI) {
     int posNodoI;
+	//Comprobamos que es un nodo dentro del rango permitido
     assert(numNodoI < MAX_NODOSI);
+	
+	//Calculamos la posición global que le corresponde al i-nodo en el sistema
     posNodoI = calculaPosNodoI(numNodoI);
 
+	//Nos colocamos en la posición que corresponde al nodoI
     if (lseek(miSistemaDeFicheros->fdDiscoVirtual, posNodoI, SEEK_SET) == (off_t) - 1) {
         perror("Falló lseek en escribeNodoI");
         return -1;
     }
+	//Escribimos nuestro nodoI en el disco
     if (write(miSistemaDeFicheros->fdDiscoVirtual, nodoI, sizeof (EstructuraNodoI)) == -1) {
         perror("Falló write en escribeNodoI");
     }
@@ -131,10 +147,12 @@ int escribeNodoI(MiSistemaDeFicheros* miSistemaDeFicheros, int numNodoI, Estruct
 }
 
 int escribeSuperBloque(MiSistemaDeFicheros* miSistemaDeFicheros) {
+	//Colocamos el puntero sobre el super bloque(Posición 0 del sistema).
     if (lseek(miSistemaDeFicheros->fdDiscoVirtual, TAM_BLOQUE_BYTES * SUPERBLOQUE_IDX, SEEK_SET) == (off_t) - 1) {
         perror("Falló lseek en escribeSuperBloque");
         return -1;
     }
+	//Escribimos nuestro superbloque en el sistema
     if (write(miSistemaDeFicheros->fdDiscoVirtual, &(miSistemaDeFicheros->superBloque), sizeof (EstructuraSuperBloque)) == -1) {
         perror("Falló write en escribeSuperBloque");
         return -1;
@@ -142,6 +160,7 @@ int escribeSuperBloque(MiSistemaDeFicheros* miSistemaDeFicheros) {
     return 0;
 }
 
+/*	Actualizamos los directorios en el disco	*/
 int escribeDirectorio(MiSistemaDeFicheros* miSistemaDeFicheros) {
     if (lseek(miSistemaDeFicheros->fdDiscoVirtual, TAM_BLOQUE_BYTES * DIRECTORIO_IDX, SEEK_SET) == (off_t) - 1) {
         perror("Falló lseek en escribeDirectorio");
@@ -154,27 +173,35 @@ int escribeDirectorio(MiSistemaDeFicheros* miSistemaDeFicheros) {
     return 0;
 }
 
+/*Dado un número de nodo, nos devuelve la posición en nuestro sistema del nodo*/
+
 int calculaPosNodoI(int numNodoI) {
     int whichInodeBlock;
     int whichInodeInBlock;
     int inodeLocation;
 
+	//Primero calculamos su bloque
     whichInodeBlock = numNodoI / NODOSI_POR_BLOQUE;
+	//Calculamos su posición en el bloque
     whichInodeInBlock = numNodoI % NODOSI_POR_BLOQUE;
-
+	//Calculamos su posición global en el sistema
     inodeLocation = (NODOI_IDX + whichInodeBlock) * TAM_BLOQUE_BYTES + whichInodeInBlock * sizeof (EstructuraNodoI);
     return inodeLocation;
 }
 
+/*	Leemos los i-nodos del disco y los guardamos en la estructura de nodosI */
 void initNodosI(MiSistemaDeFicheros* miSistemaDeFicheros) {
     int numNodoI;
     EstructuraNodoI* temp = malloc(sizeof (EstructuraNodoI));
-
+	
     for (numNodoI = 0; numNodoI < MAX_NODOSI; numNodoI++) {
         leeNodoI(miSistemaDeFicheros, numNodoI, temp);
+	//Tenemos el nodoI de la posición numNodoI
         if (temp->libre) {
             miSistemaDeFicheros->nodosI[numNodoI] = NULL;
-        } else {
+        } 
+	//Si está vacío ponemos un NULL. Si hay un i-nodo nos lo traemos y actualizamos el contador.
+	else {
             miSistemaDeFicheros->numNodosLibres--;
             miSistemaDeFicheros->nodosI[numNodoI] = malloc(sizeof (EstructuraNodoI));
             copiaNodoI(miSistemaDeFicheros->nodosI[numNodoI], temp);
@@ -182,6 +209,7 @@ void initNodosI(MiSistemaDeFicheros* miSistemaDeFicheros) {
     }
 }
 
+/*	Leemos el nodo del disco  de la posición numNodoI y lo guardamos en nodoI */
 int leeNodoI(MiSistemaDeFicheros* miSistemaDeFicheros, int numNodoI, EstructuraNodoI* nodoI) {
     int posNodoI;
     assert(numNodoI < MAX_NODOSI);
@@ -192,6 +220,7 @@ int leeNodoI(MiSistemaDeFicheros* miSistemaDeFicheros, int numNodoI, EstructuraN
     return 0;
 }
 
+/*Copia los datos del nodo src en el nodo dest */
 void copiaNodoI(EstructuraNodoI* dest, EstructuraNodoI* src) {
     int i;
 
@@ -204,6 +233,7 @@ void copiaNodoI(EstructuraNodoI* dest, EstructuraNodoI* src) {
         dest->idxBloques[i] = src->idxBloques[i];
 }
 
+//Busca el primer i-nodo que está vacío 
 int buscaNodoLibre(MiSistemaDeFicheros* miSistemaDeFicheros) {
     int i;
     for (i = 0; i < MAX_NODOSI; i++) {
@@ -213,6 +243,7 @@ int buscaNodoLibre(MiSistemaDeFicheros* miSistemaDeFicheros) {
     return -1; // NO hay nodos-i libres. Esto no debería ocurrir.
 }
 
+//Busca un directorio que se llame nombre y devuelve su número de posición relativa.
 int buscaPosDirectorio(MiSistemaDeFicheros* miSistemaDeFicheros, char* nombre) {
     int i;
 
@@ -226,7 +257,7 @@ int buscaPosDirectorio(MiSistemaDeFicheros* miSistemaDeFicheros, char* nombre) {
 }
 
 
-// Devuelve el no de bloques libres en el FS.
+// Devuelve el numero de bloques libres en el FS.
 int myQuota(MiSistemaDeFicheros* miSistemaDeFicheros) {
     int freeCount = 0;
     int i;
@@ -241,11 +272,15 @@ int myQuota(MiSistemaDeFicheros* miSistemaDeFicheros) {
     return freeCount;
 }
 
+//ISK_LBA es un int, idxBloques un array de int.
+
 void reservaBloquesNodosI(MiSistemaDeFicheros* miSistemaDeFicheros, DISK_LBA idxBloques[], int numBloques) {
     int i = 0;
     int bloqueActual = 0;
-
+	//Hasta que nos quedemos sin bloques libres o reservemos los bloques que queremos(numBloques).
     while ((bloqueActual < numBloques) && (i < NUM_BITS)) {
+	//Reservamos espacio para numBloques de bloques para i-nodos
+	//Y los marcamos como ocupados. Deben ser bloques libres
         if (miSistemaDeFicheros->mapaDeBits[i] == 0) {
             miSistemaDeFicheros->mapaDeBits[i] = 1;
             idxBloques[bloqueActual] = i;
